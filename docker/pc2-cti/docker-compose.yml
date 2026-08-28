@@ -1,0 +1,279 @@
+# ============================================
+# SOC IA — PC3 : MISP + OpenCTI
+# Stack Threat Intelligence Complète
+# ============================================
+
+version: '3.8'
+
+networks:
+  threat-intel-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+services:
+
+  # ==========================================
+  # STACK MISP
+  # ==========================================
+
+  db:
+    image: mariadb:10.11
+    container_name: threat-intel-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: misp
+    volumes:
+      - /opt/threat-intel/mysql-data:/var/lib/mysql
+    networks:
+      - threat-intel-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: threat-intel-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${MISP_REDIS_PASSWORD}
+    volumes:
+      - /opt/threat-intel/redis-data:/data
+    networks:
+      - threat-intel-net
+
+  misp-modules:
+    image: ghcr.io/misp/misp-docker/misp-modules:latest
+    container_name: misp-modules
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    environment:
+      REDIS_BACKEND: redis
+      REDIS_PASSWORD: ${MISP_REDIS_PASSWORD}
+    networks:
+      - threat-intel-net
+
+  misp-core:
+    image: ghcr.io/misp/misp-docker/misp-core:latest
+    container_name: misp
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+      - misp-modules
+    environment:
+      MYSQL_HOST: db
+      MYSQL_DATABASE: misp
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      BASE_URL: https://100.64.0.13
+      ADMIN_EMAIL: ${MISP_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${MISP_ADMIN_PASSWORD}
+      MISP_MODULES_FQDN: http://misp-modules
+      REDIS_FQDN: redis
+      REDIS_PASSWORD: ${MISP_REDIS_PASSWORD}
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - threat-intel-net
+
+  # ==========================================
+  # STACK OPENCTI
+  # ==========================================
+
+  opencti-redis:
+    image: redis:7-alpine
+    container_name: opencti-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${OPENCTI_REDIS_PASSWORD}
+    volumes:
+      - /opt/threat-intel/opencti-redis-data:/data
+    networks:
+      - threat-intel-net
+
+  opencti-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.6
+    container_name: opencti-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms3g -Xmx3g"
+      - cluster.routing.allocation.disk.threshold_enabled=false
+    volumes:
+      - /opt/threat-intel/opencti-elasticsearch:/usr/share/elasticsearch/data
+    networks:
+      - threat-intel-net
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "9200:9200"
+
+  opencti-minio:
+    image: minio/minio:latest
+    container_name: opencti-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${OPENCTI_MINIO_USER}
+      MINIO_ROOT_PASSWORD: ${OPENCTI_MINIO_PASSWORD}
+    volumes:
+      - /opt/threat-intel/opencti-minio:/data
+    networks:
+      - threat-intel-net
+
+  opencti-rabbitmq:
+    image: rabbitmq:4.1-management
+    container_name: opencti-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${OPENCTI_RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${OPENCTI_RABBITMQ_PASSWORD}
+    volumes:
+      - /opt/threat-intel/opencti-rabbitmq:/var/lib/rabbitmq
+    ports:
+      - "15672:15672"
+    networks:
+      - threat-intel-net
+
+  opencti-postgres:
+    image: postgres:16-alpine
+    container_name: opencti-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${OPENCTI_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${OPENCTI_POSTGRES_PASSWORD}
+      POSTGRES_DB: opencti
+    volumes:
+      - /opt/threat-intel/opencti-data:/var/lib/postgresql/data
+    networks:
+      - threat-intel-net
+
+  opencti:
+    image: opencti/platform:6.6.13
+    container_name: opencti-platform
+    restart: unless-stopped
+    depends_on:
+      - opencti-redis
+      - opencti-elasticsearch
+      - opencti-minio
+      - opencti-rabbitmq
+      - opencti-postgres
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=4096
+      - APP__PORT=8080
+      - APP__BASE_URL=http://100.64.0.13:8080
+      - APP__ADMIN__EMAIL=${OPENCTI_ADMIN_EMAIL}
+      - APP__ADMIN__PASSWORD=${OPENCTI_ADMIN_PASSWORD}
+      - APP__ADMIN__TOKEN=${OPENCTI_ADMIN_TOKEN}
+      - APP__SESSION_SECRET=${OPENCTI_SESSION_SECRET}
+      - REDIS__HOSTNAME=opencti-redis
+      - REDIS__PORT=6379
+      - REDIS__PASSWORD=${OPENCTI_REDIS_PASSWORD}
+      - ELASTICSEARCH__URL=http://opencti-elasticsearch:9200
+      - MINIO__ENDPOINT=opencti-minio
+      - MINIO__PORT=9000
+      - MINIO__USE_SSL=false
+      - MINIO__ACCESS_KEY=${OPENCTI_MINIO_USER}
+      - MINIO__SECRET_KEY=${OPENCTI_MINIO_PASSWORD}
+      - RABBITMQ__HOSTNAME=opencti-rabbitmq
+      - RABBITMQ__PORT=5672
+      - RABBITMQ__PORT_MANAGEMENT=15672
+      - RABBITMQ__MANAGEMENT_SSL=false
+      - RABBITMQ__USERNAME=${OPENCTI_RABBITMQ_USER}
+      - RABBITMQ__PASSWORD=${OPENCTI_RABBITMQ_PASSWORD}
+      - RABBITMQ__VHOST=/
+      - SMTP__HOSTNAME=localhost
+      - SMTP__PORT=25
+      - SMTP__USE_SSL=false
+      - PROVIDERS__LOCAL__STRATEGY=LocalStrategy
+    ports:
+      - "8080:8080"
+    networks:
+      - threat-intel-net
+
+  opencti-worker:
+    image: opencti/worker:6.6.13
+    container_name: opencti-worker
+    restart: unless-stopped
+    depends_on:
+      - opencti
+    environment:
+      - OPENCTI_URL=http://opencti:8080
+      - OPENCTI_TOKEN=${OPENCTI_ADMIN_TOKEN}
+      - WORKER_LOG_LEVEL=info
+    networks:
+      - threat-intel-net
+
+  connector-misp:
+    image: opencti/connector-misp:6.6.13
+    container_name: connector-misp
+    restart: unless-stopped
+    depends_on:
+      - opencti
+      - opencti-rabbitmq
+    environment:
+      - OPENCTI_URL=http://opencti:8080
+      - OPENCTI_TOKEN=${OPENCTI_ADMIN_TOKEN}
+      - CONNECTOR_ID=6ba8a6e5-8e35-4f8c-9f6b-2c3e4d5f6a7b
+      - CONNECTOR_NAME=MISP
+      - CONNECTOR_SCOPE=misp
+      - CONNECTOR_LOG_LEVEL=info
+      - MISP_URL=https://100.64.0.13
+      - MISP_KEY=${MISP_API_KEY}
+      - MISP_SSL_VERIFY=false
+      - MISP_CREATE_REPORTS=true
+      - MISP_REPORT_TYPE=misp-event
+      - MISP_IMPORT_FROM_DATE=2024-01-01
+      - MISP_INTERVAL=30
+    networks:
+      - threat-intel-net
+
+  connector-mitre:
+    image: opencti/connector-mitre:6.6.13
+    container_name: connector-mitre
+    restart: unless-stopped
+    depends_on:
+      - opencti
+      - opencti-rabbitmq
+    environment:
+      - OPENCTI_URL=http://opencti:8080
+      - OPENCTI_TOKEN=${OPENCTI_ADMIN_TOKEN}
+      - CONNECTOR_ID=7cb9b7f6-9f46-5f9d-0f7c-3d4e5f6a7b8c
+      - CONNECTOR_NAME=MITRE ATT&CK
+      - CONNECTOR_SCOPE=mitre-attack
+      - CONNECTOR_LOG_LEVEL=info
+      - MITRE_ENTERPRISE_FILE_URL=https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack.json
+      - MITRE_INTERVAL=7
+    networks:
+      - threat-intel-net
+
+  connector-abuseipdb-ipblacklist:
+    image: opencti/connector-abuseipdb-ipblacklist:6.6.13
+    container_name: connector-abuseipdb-ipblacklist
+    restart: unless-stopped
+    depends_on:
+      - opencti
+      - opencti-rabbitmq
+    environment:
+      - OPENCTI_URL=http://opencti:8080
+      - OPENCTI_TOKEN=${OPENCTI_ADMIN_TOKEN}
+      - CONNECTOR_ID=c3d4e5f6-a7b8-4901-cdef-0123456789ab
+      - CONNECTOR_NAME=AbuseIPDB IP Blacklist
+      - CONNECTOR_SCOPE=abuseipdb
+      - CONNECTOR_LOG_LEVEL=info
+      - ABUSEIPDB_URL=https://api.abuseipdb.com/api/v2/blacklist
+      - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
+      - ABUSEIPDB_SCORE=75
+      - ABUSEIPDB_LIMIT=1000
+      - ABUSEIPDB_INTERVAL=2
+    networks:
+      - threat-intel-net
