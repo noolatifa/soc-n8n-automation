@@ -1,0 +1,2344 @@
+{
+  "name": "version-rapport",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wazuh.manager:55000/security/user/authenticate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "raw",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "fae8c42b-4293-41ba-8dcd-48b2fa361897",
+      "name": "Get Wazuh Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2368,
+        720
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "<N8N_HTTP_BASIC_CRED_ID>",
+          "name": "yo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "2ca187c7-84b0-4c5e-afbb-12be832250e8",
+        "options": {}
+      },
+      "id": "37da0af8-8b12-4ad4-a518-0631660e3b0b",
+      "name": "wazuh-alerts",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -3136,
+        0
+      ],
+      "webhookId": "2ca187c7-84b0-4c5e-afbb-12be832250e8"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://100.64.0.13:443/events/add",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "<MISP_API_TOKEN>"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"info\": \"Wazuh Alert [{{ $json.rule && $json.rule.id ? $json.rule.id : 'N/A' }}] - {{ $json.rule && $json.rule.description ? $json.rule.description : 'Unknown' }}\",\n  \"threat_level_id\": \"3\",\n  \"analysis\": \"0\",\n  \"distribution\": \"0\",\n  \"Attribute\": [\n    {\n      \"type\": \"ip-src\",\n      \"category\": \"Network activity\",\n      \"value\": \"{{ $json.data && $json.data.srcip ? $json.data.srcip : ($json.agent && $json.agent.ip ? $json.agent.ip : 'unknown') }}\",\n      \"comment\": \"Source IP from Wazuh\"\n    },\n    {\n      \"type\": \"ip-dst\",\n      \"category\": \"Network activity\",\n      \"value\": \"{{ $json.data && $json.data.dstip ? $json.data.dstip : 'unknown' }}\",\n      \"comment\": \"Destination IP from Wazuh\"\n    },\n    {\n      \"type\": \"text\",\n      \"category\": \"External analysis\",\n      \"value\": \"{{ $json.full_log ? $json.full_log : 'No full log available' }}\",\n      \"comment\": \"Full Wazuh alert log\"\n    }\n  ],\n  \"Tag\": [\n    {\"name\": \"wazuh\"},\n    {\"name\": \"n8n-auto\"},\n    {\"name\": \"soc-pipeline\"}\n  ]\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "f2b6132b-a7d6-4f53-acf6-b27d96fbc3b1",
+      "name": "HTTP Request misp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2640,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://100.64.0.13:8080/graphql",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer <OPENCTI_TOKEN>"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"query Enrich($f: FilterGroup) { stixCyberObservables(filters: $f, first: 10) { edges { node { id entity_type observable_value x_opencti_score x_opencti_description created_at externalReferences { edges { node { source_name url description external_id } } } indicators { edges { node { name pattern x_opencti_score } } } objectMarking { definition definition_type } } } } }\",\n  \"variables\": {\n    \"f\": {\n      \"mode\": \"and\",\n      \"filterGroups\": [],\n      \"filters\": [\n        { \"key\": \"entity_type\", \"values\": [\"IPv4-Addr\"], \"operator\": \"eq\", \"mode\": \"or\" },\n        { \"key\": \"value\", \"values\": [\"{{ $json.body.data.srcip }}\", \"{{ $json.body.data.dstip }}\"], \"operator\": \"eq\", \"mode\": \"or\" }\n      ]\n    }\n  }\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "d1fba5f8-640a-45b6-a136-8e2ea7b3a7c3",
+      "name": "HTTP Request opencti",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2640,
+        416
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "4fd96eea-199d-49af-a395-9788df0c1dc9",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        -2320,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Récupère les données brutes\nconst rawAlert = $('Extract Alert').first()?.json?.body || {};\nconst mispRaw = $('HTTP Request misp').first()?.json || {};\nconst openctiRaw = $('HTTP Request opencti').first()?.json || {};\n\nlet mispData = null;\nif (mispRaw.Event) {\n  mispData = { found: true, event: mispRaw.Event, attributes: mispRaw.Event.Attribute || [] };\n} else if (mispRaw.response?.Event) {\n  mispData = { found: true, event: mispRaw.response.Event, attributes: mispRaw.response.Event.Attribute || [] };\n} else {\n  mispData = { found: false, event: null, attributes: [] };\n}\n\nlet openctiData = null;\nif (openctiRaw.data?.indicators?.edges) {\n  const edges = openctiRaw.data.indicators.edges;\n  openctiData = { found: edges.length > 0, full_response: openctiRaw.data, indicators: edges.map(e => e.node).filter(Boolean) };\n} else {\n  openctiData = { found: false, full_response: openctiRaw, indicators: [] };\n}\n\nconst wazuhAlert = {\n  id: rawAlert.rule?.id ?? rawAlert.id,\n  correlation_id: rawAlert.correlation_id,\n  timestamp: rawAlert.timestamp,\n  level: rawAlert.rule?.level,\n  description: rawAlert.rule?.description ?? rawAlert.full_log,\n  src_ip: rawAlert.data?.srcip,\n  dst_ip: rawAlert.data?.dstip,\n  agent: rawAlert.agent,\n  full_raw: rawAlert\n};\n\nconst totalMatches = (mispData.attributes?.length || 0) + (openctiData.indicators?.length || 0);\nlet preliminary_verdict = totalMatches > 0 ? \"intel_found\" : \"no_intel\";\n\nreturn [{\n  json: {\n    wazuh_alert: wazuhAlert,\n    threat_intelligence: { misp: mispData, opencti: openctiData },\n    correlation_summary: {\n      total_matches: totalMatches,\n      preliminary_verdict,\n      misp_attributes_count: mispData.attributes?.length || 0,\n      opencti_indicators_count: openctiData.indicators?.length || 0\n    },\n    analysis_request: {\n      task: \"Analyze this security alert and determine if it's a TRUE POSITIVE or FALSE POSITIVE\",\n      context: { source: \"Wazuh SIEM alert enriched with MISP and OpenCTI threat intelligence\", goal: \"Provide actionable security analysis\" }\n    }\n  }\n}];"
+      },
+      "id": "2fe55678-03bc-46c0-864f-ce969c1e0e83",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2112,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "queue": "wazuh-enriched-alerts",
+        "options": {
+          "durable": true
+        }
+      },
+      "id": "6784bf31-64b5-4cf7-b4aa-959d2cc0bbec",
+      "name": "RabbitMQ",
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1,
+      "position": [
+        -2864,
+        0
+      ],
+      "credentials": {
+        "rabbitmq": {
+          "id": "<N8N_RABBITMQ_CRED_ID>",
+          "name": "RabbitMQ account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "queue": "wazuh-enriched-alerts",
+        "options": {
+          "durable": true,
+          "parallelMessages": 1
+        }
+      },
+      "id": "456dbfc2-bcf0-42b3-b4bb-301fe6cc7a86",
+      "name": "RabbitMQ Trigger",
+      "type": "n8n-nodes-base.rabbitmqTrigger",
+      "typeVersion": 1,
+      "position": [
+        -3120,
+        336
+      ],
+      "credentials": {
+        "rabbitmq": {
+          "id": "<N8N_RABBITMQ_CRED_ID>",
+          "name": "RabbitMQ account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://100.64.0.14:8000/qualifier-alerte",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "458dfed6-0250-4b8e-84d3-ceb436c237ca",
+      "name": "HTTP Request llama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1904,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const original = $('Code').first().json;\nconst llamaResponse = $input.first().json;\n\nlet ai = llamaResponse.response ?? llamaResponse;\n\nif (typeof ai === 'string') {\n  try {\n    ai = JSON.parse(ai.replace(/```json|```/g, '').trim());\n  } catch (e) {\n    ai = { error: 'parse_failed', raw: ai };\n  }\n}\nif (Array.isArray(ai)) ai = ai[0];\n\nreturn [\n  {\n    json: {\n      correlation_id: original.wazuh_alert?.correlation_id,\n      alert: original.wazuh_alert ?? original,\n      threat_intel: original.threat_intelligence ?? null,\n      correlation: original.correlation_summary ?? null,\n      ai_analysis: ai\n    }\n  }\n];"
+      },
+      "id": "c0f5e9a9-f577-4e59-bfc1-3a1728d3e2dd",
+      "name": "Combine Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1696,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nlet payload = raw;\n\nif (raw.body && raw.body.rule) {\n  payload = raw.body;\n} else if (raw.rule) {\n  payload = raw;\n} else if (raw.message && raw.message.rule) {\n  payload = raw.message;\n} else if (typeof raw.message === 'string') {\n  try { payload = JSON.parse(raw.message); } catch(e) {}\n} else if (raw.content && typeof raw.content === 'string') {\n  try {\n    const parsedContent = JSON.parse(raw.content);\n    payload = parsedContent.body || parsedContent;\n  } catch(e) {}\n}\n\n// Correlation ID pour tracer l'alerte à travers le fast-path ET le slow-path\npayload.correlation_id = payload.correlation_id || (Date.now() + '-' + Math.random().toString(36).substring(2, 10));\n\n\nreturn [{ json: { body: payload } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2912,
+        336
+      ],
+      "id": "eb15168a-ae67-4381-b23f-abafab26ba12",
+      "name": "Extract Alert"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst aiAnalysis = data.ai_analysis || {};\nconst automatedAction = aiAnalysis.automated_action || {};\n\nconst IP_BLOCK_TYPES = ['firewall-drop', 'BLOCK_IP', 'block-ip', 'BLOCK'];\nconst PORT_BLOCK_TYPES = ['BLOCK_PORT', 'block-port', 'FIREWALL_PORT_DROP'];\nconst actions = [];\n\n// Compat rétroactive : si l'IA renvoie encore l'ancien format (action_type unique),\n// on le transforme en tableau à un seul élément.\nlet rawActions = automatedAction.actions;\nif (!Array.isArray(rawActions) && automatedAction.action_type) {\n  rawActions = [{ action_type: automatedAction.action_type, target: automatedAction.target, port: automatedAction.port, scope: automatedAction.scope }];\n}\nrawActions = rawActions || [];\n\nif (automatedAction.execute === true) {\n  for (const act of rawActions) {\n    const type = act.action_type;\n    const target = act.target;\n\n    if (IP_BLOCK_TYPES.includes(type)) {\n      actions.push({ type: 'block_ip', command: 'block-ip600', target, source: 'Wazuh-AI-Agent' });\n    }\n\n    if (PORT_BLOCK_TYPES.includes(type)) {\n      const scope = act.scope === 'GLOBAL' ? 'GLOBAL' : 'SOURCE_IP';\n      actions.push({\n        type: 'block_port',\n        command: 'block-port600',\n        target: scope === 'GLOBAL' ? 'ANY' : target,\n        port: act.port,\n        scope,\n        source: 'Wazuh-AI-Agent'\n      });\n    }\n\n    if (type === 'CREATE_HIVE_CASE' || IP_BLOCK_TYPES.includes(type) || PORT_BLOCK_TYPES.includes(type)) {\n      actions.push({\n        type: 'hive_case',\n        title: `Alerte Wazuh: ${aiAnalysis.analysis_context || 'Suspicious Activity'}`,\n        description: aiAnalysis.reasoning || 'Analyse IA requise',\n        severity: (aiAnalysis.confidence_score || 0) > 80 ? 3 : 2,\n        source: 'Wazuh-AI-Agent',\n        target\n      });\n    }\n\n    if (type === 'RUN_CORTEX_ANALYZER') {\n      actions.push({ type: 'cortex_analyzer', analyzerId: 'ipinfo', dataType: 'ip', data: target, cortexId: 'default' });\n    }\n  }\n}\n\nreturn [{ json: { ...data, actions_to_execute: actions, agent_decision: automatedAction } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -752,
+        560
+      ],
+      "id": "6b2e3a0a-e15f-49a3-ad4c-c3621ec5cd33",
+      "name": "Routeur Agent IA"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.actions_to_execute.length }}",
+                    "rightValue": 0,
+                    "operator": {
+                      "type": "number",
+                      "operation": "gt"
+                    },
+                    "id": "ca5a76e4-6686-429d-a711-c9be32c2a338"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": ""
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "6350f874-893d-4795-a2be-97d5eb04a94b",
+                    "leftValue": "true",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -512,
+        560
+      ],
+      "id": "24d08846-5219-4ef3-9585-29e871d4d60a",
+      "name": "Switch décision IA"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://thehive:9000/api/v1/case",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer <THEHIVE_TOKEN>"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"{{ $json.actions_to_execute.find(a => a.type === 'hive_case')?.title || 'Alerte Wazuh: ' + $json.agent_decision.target }}\",\n  \"description\": \"{{ $json.actions_to_execute.find(a => a.type === 'hive_case')?.description || $json.ai_analysis.reasoning || 'Décision IA' }}\",\n  \"severity\": {{ $json.actions_to_execute.find(a => a.type === 'hive_case')?.severity || 2 }},\n  \"startDate\": {{ new Date().getTime() }},\n  \"owner\": \"ai-agent\",\n  \"tags\": [\"wazuh\", \"automated\", \"ai-decision\"]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -224,
+        544
+      ],
+      "id": "26dd42e6-e003-4ba1-bee4-5a31c1298f6c",
+      "name": "Create the hive case"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        752
+      ],
+      "id": "778d40f2-9b66-4206-8cda-03ce9677bfe5",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "crit-level-check",
+              "leftValue": "={{ $json.body.alert.rule && $json.body.alert.rule.level ? $json.body.alert.rule.level : 0 }}",
+              "rightValue": 12,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0b5f60a-6c2f-4719-9319-aadbaf2530cc",
+      "name": "IF - Critical Rule Level (>=12)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2912,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const alert = $json.body?.alert ?? {};\n\n// Centralise ici les noms de commandes AR tels que définis dans ar.conf\n// Si le timeout change dans ossec.conf, on ne modifie QUE cette ligne.\nconst AR_BLOCK_TIMEOUT = 600;\nconst AR_UNBLOCK_TIMEOUT = 0;\n\nconst agentId = alert.agent?.id;\nif (!agentId) {\n  throw new Error('agent.id manquant dans le payload alert — impossible de cibler un agent Wazuh');\n}\n\nreturn {\n  json: {\n    correlation_id: $json.body?.correlation_id ?? 'unknown',\n    action_type: 'BLOCK_IP',\n    agent_id: agentId,\n    target: alert.data?.srcip ?? 'unknown',\n    rule_id: String(alert.rule?.id ?? 'unknown'),\n    rule_level: Number(alert.rule?.level ?? 0),\n    reason: 'high severity rule match',\n    ar_block_command: `block-ip${AR_BLOCK_TIMEOUT}`,\n    ar_unblock_command: `unblock-ip${AR_UNBLOCK_TIMEOUT}`\n  }\n};"
+      },
+      "id": "853f3936-4042-4c20-a239-b54681529a6d",
+      "name": "Build Preemptive Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2592,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://wazuh.manager:55000/active-response",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "agents_list",
+              "value": "={{ $('Build Preemptive Action').item.json.agent_id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $node[\"Get Wazuh Token\"].json[\"data\"]}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"command\": \"{{ $('Build Preemptive Action').item.json.ar_block_command }}\",\n  \"arguments\": [\"{{ $('Build Preemptive Action').item.json.target }}\"],\n  \"alert\": {\n    \"data\": { \"srcip\": \"{{ $('Build Preemptive Action').item.json.target }}\" },\n    \"rule\": { \"id\": \"{{ $('Build Preemptive Action').item.json.rule_id }}\", \"level\": {{ $('Build Preemptive Action').item.json.rule_level || 0 }} },\n    \"correlation_id\": \"{{ $('Build Preemptive Action').item.json.correlation_id }}\"\n  }\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "250ea850-63a7-4e11-83f6-7bfb8ba9d36c",
+      "name": "Wazuh Active Response - Block IP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2144,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://thehive:9000/api/v1/case",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer <THEHIVE_TOKEN>"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"[AUTO-CONTAINED] Rule {{ $('Build Preemptive Action').item.json.rule_id }} - {{ $('Build Preemptive Action').item.json.target }}\",\n  \"description\": \"Preemptive block executed before AI review. Reason: {{ $('Build Preemptive Action').item.json.reason }}\",\n  \"severity\": 3,\n  \"startDate\": {{ new Date().getTime() }},\n  \"owner\": \"soc-fastpath\",\n  \"tags\": [\"wazuh\", \"auto-preemptive\", \"pending-ai-review\"]\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "2c07e023-9ed4-4f8c-a822-7fcd7c7db395",
+      "name": "Create Hive Case - Provisional",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1904,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "schema": "public",
+        "table": "pending_actions",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ai_confidence": 0,
+            "correlation_id": "={{ $('Build Preemptive Action').item.json.correlation_id }}",
+            "action_type": "={{ $('Build Preemptive Action').item.json.action_type }}",
+            "target": "={{ $('Build Preemptive Action').item.json.target }}",
+            "rule_id": "={{ $('Build Preemptive Action').item.json.rule_id }}",
+            "reason": "={{ $('Build Preemptive Action').item.json.reason }}",
+            "status": "=pending",
+            "hive_case_id": "={{ $json._id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "correlation_id",
+              "displayName": "correlation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "action_type",
+              "displayName": "action_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "target",
+              "displayName": "target",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rule_id",
+              "displayName": "rule_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "hive_case_id",
+              "displayName": "hive_case_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ai_confidence",
+              "displayName": "ai_confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rollback_reason",
+              "displayName": "rollback_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confirmed_at",
+              "displayName": "confirmed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rolled_back_at",
+              "displayName": "rolled_back_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "5fe324c7-fab8-480c-b43d-7c5b791730ec",
+      "name": "Postgres - Insert Pending Action",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1616,
+        720
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "<N8N_POSTGRES_CRED_ID>",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "53df68e7-0ffa-4d2e-99d4-e66b4377c91f",
+      "name": "Not Critical - No Preemptive Action",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -2576,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.*, true AS has_pending_action\nFROM pending_actions p\nWHERE p.correlation_id = '{{ $json.correlation_id }}'\n  AND p.status = 'pending'",
+        "options": {}
+      },
+      "id": "e03d15d5-7652-4822-bc6c-d68ee6916021",
+      "name": "Postgres - Lookup Pending Actions",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1488,
+        336
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "<N8N_POSTGRES_CRED_ID>",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const combineResult = $('Combine Result').first().json;\nconst items = $input.all();\n\nconst ai = combineResult.ai_analysis || {};\nconst texte = `${ai.verdict || ''} ${ai.classification || ''} ${ai.recommendation || ''}`.toLowerCase();\nconst isFalsePositive =\n  texte.includes('false_positive') ||\n  texte.includes('false positive') ||\n  texte.includes('faux positif') ||\n  texte.includes('Faux positif') ||\n  texte.includes('legitimate');\n\n// Ne garder que les lignes reellement en attente (BLOCK_IP et/ou BLOCK_PORT)\nconst pendingRows = items.map(i => i.json).filter(row => row && row.has_pending_action === true);\n\nif (pendingRows.length === 0) {\n  // Aucune action preemptive (ni IP ni Port) prise pour ce correlation_id :\n  // on laisse l'agent IA decider d'une action fraiche (voir Routeur Agent IA)\n  return [{\n    json: {\n      ...combineResult,\n      has_pending_action: false,\n      pending_action: null,\n      reconciliation_decision: 'no_preemptive_action'\n    }\n  }];\n}\n\n// 1 ou 2 lignes en attente : une decision independante par ligne\n// (ex: confirmer le blocage IP, mais rollback le blocage de port, ou l'inverse)\nreturn pendingRows.map(row => ({\n  json: {\n    ...combineResult,\n    has_pending_action: true,\n    pending_action: row,\n    reconciliation_decision: isFalsePositive ? 'rollback' : 'confirm'\n  }\n}));"
+      },
+      "id": "5d7d006b-499e-41a6-ad2d-e945fa86fbd8",
+      "name": "Reconciliation Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1280,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "has-pending-check",
+              "leftValue": "={{ $json.has_pending_action }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "eac49927-e2af-41e4-9c5f-75f15b2b12da",
+      "name": "IF - Was Preemptive Action Taken",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "confirm-check",
+                    "leftValue": "={{ $json.reconciliation_decision }}",
+                    "rightValue": "confirm",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": "confirm"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "rollback-check",
+                    "leftValue": "={{ $json.reconciliation_decision }}",
+                    "rightValue": "rollback",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": "rollback"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "03bc5094-e9eb-49c7-ae08-e674fc53456e",
+      "name": "Switch - AI Verdict on Preemptive Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -736,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE pending_actions\nSET status = 'confirmed',\n    confirmed_at = NOW(),\n    ai_confidence = {{ $json.ai_analysis.confidence_score || 0 }}\nWHERE id = {{ $json.pending_action.id }}\nRETURNING *",
+        "options": {}
+      },
+      "id": "09465128-ff5c-4c9e-8232-fbd9f223d6c7",
+      "name": "Postgres - Mark Confirmed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -400,
+        -96
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "<N8N_POSTGRES_CRED_ID>",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=http://thehive:9000/api/v1/case/{{ $json.hive_case_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer <THEHIVE_TOKEN>"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tags\": [\"wazuh\", \"auto-preemptive\", \"confirmed-by-ai\"],\n  \"summary\": \"AI confirmed the preemptive block was justified. {{ $('Reconciliation Logic').item.json.ai_analysis.reasoning || '' }}\"\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "f7bab620-98a9-493f-8ab5-af7be32cb020",
+      "name": "Hive - Update Case (Confirmed)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://wazuh.manager:55000/active-response",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "agents_list",
+              "value": "={{ $('Build Rollback AR Payload').item.json.agent_id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.data }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"command\": \"{{ $('Build Rollback AR Payload').item.json.ar_command }}\",\n  \"arguments\": {{ JSON.stringify($('Build Rollback AR Payload').item.json.ar_arguments) }},\n  \"alert\": {\n    \"data\": { \"srcip\": \"{{ $('Build Rollback AR Payload').item.json.ar_arguments[0] }}\" },\n    \"rule\": { \"id\": \"{{ $('Build Rollback AR Payload').item.json.rule_id }}\", \"level\": {{ $('Build Rollback AR Payload').item.json.rule_level || 0 }} },\n    \"correlation_id\": \"{{ $('Build Rollback AR Payload').item.json.correlation_id }}\"\n  }\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "0e6e0bdc-1803-4a30-ab07-d141af418b0f",
+      "name": "Wazuh Active Response - Unblock (Rollback)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -144,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE pending_actions\nSET status = 'rolled_back',\n    rolled_back_at = NOW(),\n    rollback_reason = 'AI verdict: false positive'\nWHERE id = {{ $('Reconciliation Logic').item.json.pending_action.id }}\nRETURNING *",
+        "options": {}
+      },
+      "id": "b4febbce-f678-4764-988f-0b90f617653d",
+      "name": "Postgres - Mark Rolled Back",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        112,
+        176
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "<N8N_POSTGRES_CRED_ID>",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=http://thehive:9000/api/v1/case/{{ $('Reconciliation Logic').item.json.pending_action.hive_case_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer <THEHIVE_TOKEN>"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": \"FalsePositive\",\n  \"tags\": [\"wazuh\", \"auto-preemptive\", \"rolled-back\"],\n  \"summary\": \"Preemptive block was rolled back. AI verdict: false positive. {{ $('Reconciliation Logic').item.json.ai_analysis.reasoning || '' }}\"\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "debd8c53-dfdc-484c-9bb2-608bb410b746",
+      "name": "Hive - Close Case (False Positive)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        336,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wazuh.manager:55000/security/user/authenticate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "raw",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "1a091e38-28f5-4082-8e05-eb77c4ac6f3e",
+      "name": "Get Wazuh Token1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        384,
+        448
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "<N8N_HTTP_BASIC_CRED_ID>",
+          "name": "yo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://wazuh.manager:55000/active-response",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "agents_list",
+              "value": "={{ $('Switch décision IA').item.json.alert.full_raw.alert.agent.id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.data }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"command\": \"block-ip600\",\n  \"arguments\": [\"{{ $('Switch décision IA').item.json.agent_decision.target }}\", \"-\", \"ai-decision\"],\n  \"alert\": {\n    \"data\": { \"srcip\": \"{{ $('Switch décision IA').item.json.agent_decision.target }}\" }\n  }\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "df5c5190-126c-4af5-b137-000064690d8d",
+      "name": "Wazuh Active Response - Block IP1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        624,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "id": "0e905a72-2176-4c51-96ca-046e10c9cd66",
+      "name": "Merge Fast Branch",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        -1232,
+        1008
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e52d33f0-d9ea-4856-a7d8-71ee9357ee9a",
+      "name": "Merge Slow & Fast",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        -1840,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prend le 1er élément si c'est un tableau, sinon l'objet tel quel\nlet slowItem = $input.first().json;\nif (Array.isArray(slowItem)) slowItem = slowItem[0] || {};\nreturn [{ json: slowItem }];"
+      },
+      "id": "a426ea09-b7fb-4cdd-85f6-1d4666f0b3ec",
+      "name": "Extract Slow Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1616,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wazuh.manager:55000/security/user/authenticate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "raw",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "c97bc541-5ce4-434b-af08-a3275b414357",
+      "name": "Get Wazuh Token2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -448,
+        176
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "<N8N_HTTP_BASIC_CRED_ID>",
+          "name": "yo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const alert = $json.body?.alert ?? {};\n\n// Liste centralisee des ports consideres critiques.\n// A ajuster selon le contexte (services exposes, criticite metier).\nconst CRITICAL_PORTS = [21, 22, 23, 135, 139, 445, 1433, 1521, 3306, 3389,\n                         5432, 5900, 5985, 5986, 6379, 9200, 27017];\n\nconst dstPort = Number(\n  alert.data?.dstport ?? alert.data?.dest_port ?? alert.data?.port ?? 0\n);\nconst ruleLevel = Number(alert.rule?.level ?? 0);\nconst isCriticalPort = CRITICAL_PORTS.includes(dstPort);\n\nreturn [{\n  json: {\n    ...$json,\n    dst_port: dstPort,\n    is_critical_port: isCriticalPort,\n    port_block_eligible: ruleLevel >= 12 && isCriticalPort\n  }\n}];"
+      },
+      "id": "02f90a27-bb55-4e1d-b2e5-0312c2176388",
+      "name": "Check Port Criticality",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3168,
+        1424
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "crit-port-check",
+              "leftValue": "={{ $json.port_block_eligible }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7d54b229-78a6-48dc-bf5b-7032f3fb75ce",
+      "name": "IF - Critical Port (Level>=12 AND Port Critical)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2912,
+        1424
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const alert = $json.body?.alert ?? {};\n\n// Meme principe que Build Preemptive Action, pour le blocage de port.\nconst AR_BLOCK_TIMEOUT = 600;\nconst AR_UNBLOCK_TIMEOUT = 0;\n\nconst agentId = alert.agent?.id;\nif (!agentId) {\n  throw new Error('agent.id manquant dans le payload alert - impossible de cibler un agent Wazuh');\n}\n\nconst srcIp = alert.data?.srcip ?? 'unknown';\nconst dstPort = $json.dst_port ?? (alert.data?.dstport ?? 'unknown');\n\nreturn {\n  json: {\n    correlation_id: $json.body?.correlation_id ?? 'unknown',\n    action_type: 'BLOCK_PORT',\n    agent_id: agentId,\n    src_ip: srcIp,\n    dst_port: dstPort,\n    // target stocke au format 'ip:port' pour rester compatible avec le schema\n    // generique de la table pending_actions (colonne 'target' unique)\n    target: `${srcIp}:${dstPort}`,\n    rule_id: String(alert.rule?.id ?? 'unknown'),\n    rule_level: Number(alert.rule?.level ?? 0),\n    reason: 'high severity rule match on critical port',\n    ar_block_command: `block-port${AR_BLOCK_TIMEOUT}`,\n    ar_unblock_command: `unblock-port${AR_UNBLOCK_TIMEOUT}`\n  }\n};"
+      },
+      "id": "ce41e892-34fe-4b37-8f8a-8ef6d7cace5f",
+      "name": "Build Preemptive Port Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2592,
+        1248
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wazuh.manager:55000/security/user/authenticate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "raw",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "6ce66850-e6c1-487a-8d6c-7043c78845a3",
+      "name": "Get Wazuh Token (Port)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2368,
+        1248
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "<N8N_HTTP_BASIC_CRED_ID>",
+          "name": "yo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://wazuh.manager:55000/active-response",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "agents_list",
+              "value": "={{ $('Build Preemptive Port Action').item.json.agent_id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $node[\"Get Wazuh Token (Port)\"].json[\"data\"]}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"command\": \"{{ $('Build Preemptive Port Action').item.json.ar_block_command }}\",\n  \"arguments\": [\"{{ $('Build Preemptive Port Action').item.json.src_ip }}\", \"{{ $('Build Preemptive Port Action').item.json.dst_port }}\"],\n  \"alert\": {\n    \"data\": { \"srcip\": \"{{ $('Build Preemptive Port Action').item.json.src_ip }}\", \"dstport\": \"{{ $('Build Preemptive Port Action').item.json.dst_port }}\" },\n    \"rule\": { \"id\": \"{{ $('Build Preemptive Port Action').item.json.rule_id }}\", \"level\": {{ $('Build Preemptive Port Action').item.json.rule_level || 0 }} },\n    \"correlation_id\": \"{{ $('Build Preemptive Port Action').item.json.correlation_id }}\"\n  }\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "2f1a1701-27af-4dd6-80f4-15567e7423d1",
+      "name": "Wazuh Active Response - Block Port",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2144,
+        1248
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://thehive:9000/api/v1/case",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer <THEHIVE_TOKEN>"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"[AUTO-CONTAINED] Port {{ $('Build Preemptive Port Action').item.json.dst_port }} - Rule {{ $('Build Preemptive Port Action').item.json.rule_id }} - {{ $('Build Preemptive Port Action').item.json.src_ip }}\",\n  \"description\": \"Preemptive port block executed before AI review. Reason: {{ $('Build Preemptive Port Action').item.json.reason }}\",\n  \"severity\": 3,\n  \"startDate\": {{ new Date().getTime() }},\n  \"owner\": \"soc-fastpath\",\n  \"tags\": [\"wazuh\", \"auto-preemptive\", \"port-block\", \"pending-ai-review\"]\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "d933b9da-f4c3-4ad6-a577-02614ed02313",
+      "name": "Create Hive Case - Provisional (Port)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1904,
+        1248
+      ]
+    },
+    {
+      "parameters": {
+        "schema": "public",
+        "table": "pending_actions",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ai_confidence": 0,
+            "correlation_id": "={{ $('Build Preemptive Port Action').item.json.correlation_id }}",
+            "action_type": "={{ $('Build Preemptive Port Action').item.json.action_type }}",
+            "target": "={{ $('Build Preemptive Port Action').item.json.target }}",
+            "rule_id": "={{ $('Build Preemptive Port Action').item.json.rule_id }}",
+            "reason": "={{ $('Build Preemptive Port Action').item.json.reason }}",
+            "status": "=pending",
+            "hive_case_id": "={{ $json._id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "correlation_id",
+              "displayName": "correlation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "action_type",
+              "displayName": "action_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "target",
+              "displayName": "target",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rule_id",
+              "displayName": "rule_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "hive_case_id",
+              "displayName": "hive_case_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ai_confidence",
+              "displayName": "ai_confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rollback_reason",
+              "displayName": "rollback_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confirmed_at",
+              "displayName": "confirmed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rolled_back_at",
+              "displayName": "rolled_back_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "0355ca2e-1eae-4c55-9a35-323b6a2d6e98",
+      "name": "Postgres - Insert Pending Port Action",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1648,
+        1248
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "<N8N_POSTGRES_CRED_ID>",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "221a2b7c-793a-47df-8f3e-994ec5babed4",
+      "name": "Not Critical - No Preemptive Port Action",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -2576,
+        1504
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "9c827a90-afb5-4df2-b46a-a7261dc866ca",
+      "name": "Merge Port Branch",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        -1376,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const row = $('Reconciliation Logic').item.json.pending_action;\nconst alertFullRaw = $('Reconciliation Logic').item.json.alert?.full_raw ?? {};\nconst agentId = alertFullRaw.alert?.agent?.id ?? alertFullRaw.agent?.id;\n\nif (!agentId) {\n  throw new Error('agent.id introuvable dans alert.full_raw - impossible de cibler l\\'agent pour le rollback');\n}\n\nlet command, args;\nif (row.action_type === 'BLOCK_PORT') {\n  const [ip, port] = String(row.target).split(':');\n  command = 'unblock-port0';\n  args = [ip, port];\n} else {\n  command = 'unblock-ip0';\n  args = [row.target];\n}\n\nreturn {\n  json: {\n    agent_id: agentId,\n    ar_command: command,\n    ar_arguments: args,\n    action_type: row.action_type,\n    target: row.target,\n    rule_id: row.rule_id ?? 'unknown',\n    rule_level: Number(row.rule_level ?? 0),\n    correlation_id: row.correlation_id\n  }\n};"
+      },
+      "id": "8ca4f863-6200-48f2-964e-504db4df33d5",
+      "name": "Build Rollback AR Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ai-block-ip-check",
+              "leftValue": "={{ $('Switch décision IA').item.json.actions_to_execute.some(a => a.type === 'block_ip') }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "796c25db-e02e-46a1-ab48-a55b0523bf83",
+      "name": "IF - AI Decided Block IP",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        80,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ai-block-port-check",
+              "leftValue": "={{ $('Switch décision IA').item.json.actions_to_execute.some(a => a.type === 'block_port') }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "082f454a-6761-45fe-84fa-dc5f9665bc04",
+      "name": "IF - AI Decided Block Port",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        80,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wazuh.manager:55000/security/user/authenticate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "raw",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "7ac92b0c-6a60-4333-888d-7f2408f8a9f8",
+      "name": "Get Wazuh Token (Port AI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        368,
+        688
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "<N8N_HTTP_BASIC_CRED_ID>",
+          "name": "yo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://wazuh.manager:55000/active-response",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "agents_list",
+              "value": "={{ $('Switch décision IA').item.json.alert.full_raw.alert.agent.id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.data }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"command\": \"block-port600\",\n  \"arguments\": [\n    \"{{ $('Switch décision IA').item.json.actions_to_execute.find(a => a.type === 'block_port').target }}\",\n    \"{{ $('Switch décision IA').item.json.actions_to_execute.find(a => a.type === 'block_port').port }}\",\n    \"-\",\n    \"ai-decision\"\n  ],\n  \"alert\": {\n    \"data\": {\n      \"srcip\": \"{{ $('Switch décision IA').item.json.actions_to_execute.find(a => a.type === 'block_port').target }}\",\n      \"dstport\": \"{{ $('Switch décision IA').item.json.actions_to_execute.find(a => a.type === 'block_port').port }}\"\n    },\n    \"correlation_id\": \"{{ $('Combine Result').item.json.correlation_id }}\"\n  }\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "770dbb34-0604-415f-b479-39b9973ead03",
+      "name": "Wazuh Active Response - Block Port1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        624,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO alerts (timestamp, src_ip, description, rule_level, correlation_id)\nVALUES (NOW(), '{{ $json.body.alert.data.srcip || 'unknown' }}',\n'{{ ($json.body.alert.rule.description || 'Wazuh alert').replaceAll(\"'\", \"''\") }}',\n{{ $json.body.alert.rule.level || 0 }}, '{{ $json.body.correlation_id }}')\nON CONFLICT (correlation_id) DO NOTHING",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -2512,
+        0
+      ],
+      "id": "5e0b9cdd-e984-4b09-b3a8-33b9c1c7e40c",
+      "name": "Alerts - Insert",
+      "credentials": {
+        "postgres": {
+          "id": "<N8N_POSTGRES_CRED_ID>",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE alerts SET\n ai_classification = '{{ ($json.ai_analysis.classification || '').replaceAll(\"'\", \"''\") }}',\n ai_attack_type = '{{ ($json.ai_analysis.attack_type || '').replaceAll(\"'\", \"''\") }}',\n ai_confidence = {{ $json.ai_analysis.confidence_score || 0 }},\n mitre_tactic = '{{ ($json.ai_analysis.mitre_tactic || '').replaceAll(\"'\", \"''\") }}',\n analysis_context = '{{ ($json.ai_analysis.analysis_context || '').replaceAll(\"'\", \"''\") }}',\n reasoning = '{{ ($json.ai_analysis.reasoning || '').replaceAll(\"'\", \"''\") }}'\nWHERE correlation_id = '{{ $json.correlation_id }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1488,
+        112
+      ],
+      "id": "75e12fc2-54c0-4e78-942b-2eef30b42c82",
+      "name": "Alerts - Update AI",
+      "credentials": {
+        "postgres": {
+          "id": "<N8N_POSTGRES_CRED_ID>",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE alerts SET action_executed = COALESCE(action_executed || ' | ', '') || 'AI_BLOCK:{{ $('Routeur Agent IA').item.json.actions_to_execute.find(a => a.type === 'block_ip')?.target || 'unknown' }} | HIVE_CASE:{{ $('Create the hive case').item.json._id || 'none' }}'\nWHERE correlation_id = '{{ $('Routeur Agent IA').item.json.correlation_id || $('Reconciliation Logic').item.json.correlation_id }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        832,
+        448
+      ],
+      "id": "98b66234-6d4e-4597-86a7-2000c1e735b0",
+      "name": "Alerts - Log AI Block IP",
+      "credentials": {
+        "postgres": {
+          "id": "<N8N_POSTGRES_CRED_ID>",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE alerts SET action_executed = COALESCE(action_executed || ' | ', '') || 'AI_BLOCK_PORT:{{ $('Routeur Agent IA').item.json.actions_to_execute.find(a => a.type === 'block_port')?.target || 'unknown' }}:{{ $('Routeur Agent IA').item.json.actions_to_execute.find(a => a.type === 'block_port')?.port || '' }} | HIVE_CASE:{{ $('Create the hive case').item.json._id || 'none' }}'\nWHERE correlation_id = '{{ $('Routeur Agent IA').item.json.correlation_id || $('Reconciliation Logic').item.json.correlation_id }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        832,
+        704
+      ],
+      "id": "026f848d-677f-49e8-af7f-c2b53aeaadba",
+      "name": "Alerts - Log AI Block Port",
+      "credentials": {
+        "postgres": {
+          "id": "<N8N_POSTGRES_CRED_ID>",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "privateKey",
+        "command": "=ansible-playbook /etc/ansible/playbooks/collect_forensics.yml"
+      },
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        144,
+        -96
+      ],
+      "id": "6adccc14-5e55-4b26-b776-812079820ac9",
+      "name": "Run Forensics Playbook",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "<N8N_SSH_KEY_CRED_ID>",
+          "name": "SSH Private Key account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "privateKey",
+        "command": "=ansible-playbook /etc/ansible/playbooks/collect_forensics.yml"
+      },
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        576
+      ],
+      "id": "9de79077-74ac-4b5a-b956-4269471356f8",
+      "name": "Run Forensics Playbook1",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "<N8N_SSH_KEY_CRED_ID>",
+          "name": "SSH Private Key account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "wazuh-alerts": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request misp": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request opencti": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request llama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RabbitMQ Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request llama": {
+      "main": [
+        [
+          {
+            "node": "Combine Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Alert": {
+      "main": [
+        [
+          {
+            "node": "IF - Critical Rule Level (>=12)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Port Criticality",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request misp",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request opencti",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Alerts - Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Result": {
+      "main": [
+        [
+          {
+            "node": "Merge Slow & Fast",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Alerts - Update AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Routeur Agent IA": {
+      "main": [
+        [
+          {
+            "node": "Switch décision IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch décision IA": {
+      "main": [
+        [
+          {
+            "node": "Create the hive case",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Critical Rule Level (>=12)": {
+      "main": [
+        [
+          {
+            "node": "Build Preemptive Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Critical - No Preemptive Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Preemptive Action": {
+      "main": [
+        [
+          {
+            "node": "Get Wazuh Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Hive Case - Provisional": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Insert Pending Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reconciliation Logic": {
+      "main": [
+        [
+          {
+            "node": "IF - Was Preemptive Action Taken",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Was Preemptive Action Taken": {
+      "main": [
+        [
+          {
+            "node": "Switch - AI Verdict on Preemptive Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Routeur Agent IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - AI Verdict on Preemptive Action": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Mark Confirmed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Rollback AR Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Mark Confirmed": {
+      "main": [
+        [
+          {
+            "node": "Hive - Update Case (Confirmed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Mark Rolled Back": {
+      "main": [
+        [
+          {
+            "node": "Hive - Close Case (False Positive)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Wazuh Token": {
+      "main": [
+        [
+          {
+            "node": "Wazuh Active Response - Block IP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wazuh Active Response - Block IP": {
+      "main": [
+        [
+          {
+            "node": "Create Hive Case - Provisional",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Wazuh Token1": {
+      "main": [
+        [
+          {
+            "node": "Wazuh Active Response - Block IP1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create the hive case": {
+      "main": [
+        [
+          {
+            "node": "IF - AI Decided Block IP",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF - AI Decided Block Port",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not Critical - No Preemptive Action": {
+      "main": [
+        [
+          {
+            "node": "Merge Fast Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Insert Pending Action": {
+      "main": [
+        [
+          {
+            "node": "Merge Fast Branch",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Fast Branch": {
+      "main": [
+        [
+          {
+            "node": "Merge Slow & Fast",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Slow & Fast": {
+      "main": [
+        [
+          {
+            "node": "Extract Slow Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Slow Item": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Lookup Pending Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Wazuh Token2": {
+      "main": [
+        [
+          {
+            "node": "Wazuh Active Response - Unblock (Rollback)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Port Criticality": {
+      "main": [
+        [
+          {
+            "node": "IF - Critical Port (Level>=12 AND Port Critical)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Critical Port (Level>=12 AND Port Critical)": {
+      "main": [
+        [
+          {
+            "node": "Build Preemptive Port Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Critical - No Preemptive Port Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Preemptive Port Action": {
+      "main": [
+        [
+          {
+            "node": "Get Wazuh Token (Port)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Wazuh Token (Port)": {
+      "main": [
+        [
+          {
+            "node": "Wazuh Active Response - Block Port",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wazuh Active Response - Block Port": {
+      "main": [
+        [
+          {
+            "node": "Create Hive Case - Provisional (Port)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Hive Case - Provisional (Port)": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Insert Pending Port Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not Critical - No Preemptive Port Action": {
+      "main": [
+        [
+          {
+            "node": "Merge Port Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Insert Pending Port Action": {
+      "main": [
+        [
+          {
+            "node": "Merge Port Branch",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Port Branch": {
+      "main": [
+        [
+          {
+            "node": "Merge Fast Branch",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Postgres - Lookup Pending Actions": {
+      "main": [
+        [
+          {
+            "node": "Reconciliation Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Rollback AR Payload": {
+      "main": [
+        [
+          {
+            "node": "Get Wazuh Token2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wazuh Active Response - Unblock (Rollback)": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Mark Rolled Back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - AI Decided Block IP": {
+      "main": [
+        [
+          {
+            "node": "Get Wazuh Token1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - AI Decided Block Port": {
+      "main": [
+        [
+          {
+            "node": "Get Wazuh Token (Port AI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Wazuh Token (Port AI)": {
+      "main": [
+        [
+          {
+            "node": "Wazuh Active Response - Block Port1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alerts - Insert": {
+      "main": [
+        []
+      ]
+    },
+    "Wazuh Active Response - Block IP1": {
+      "main": [
+        [
+          {
+            "node": "Alerts - Log AI Block IP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wazuh Active Response - Block Port1": {
+      "main": [
+        [
+          {
+            "node": "Alerts - Log AI Block Port",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alerts - Log AI Block Port": {
+      "main": [
+        [
+          {
+            "node": "Run Forensics Playbook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alerts - Log AI Block IP": {
+      "main": [
+        [
+          {
+            "node": "Run Forensics Playbook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hive - Close Case (False Positive)": {
+      "main": [
+        []
+      ]
+    },
+    "Hive - Update Case (Confirmed)": {
+      "main": [
+        [
+          {
+            "node": "Run Forensics Playbook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "ce1d5b3f-5e84-4eb8-b530-06ad84761536",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "<N8N_INSTANCE_ID>"
+  },
+  "nodeGroups": [],
+  "id": "kox7NDn2NoeptOmc",
+  "tags": []
+}
