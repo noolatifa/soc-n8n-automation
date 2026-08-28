@@ -1,0 +1,33 @@
+---
+- name: Collect forensic evidence
+  hosts: vulnerable_machines
+  become: yes
+
+  tasks:
+    - name: Create timestamped evidence directory
+      file:
+        path: "/tmp/evidence_{{ ansible_date_time.epoch }}"
+        state: directory
+        mode: '0755'
+      register: evidence_dir
+
+    - name: Collect full process list
+      shell: ps auxf > {{ evidence_dir.path }}/ps.txt
+
+    - name: Collect active network connections
+      shell: netstat -tulpn > {{ evidence_dir.path }}/netstat.txt
+
+    - name: Collect recent user logins
+      shell: last -20 > {{ evidence_dir.path }}/last.txt
+
+    - name: Collect authentication log excerpts
+      shell: tail -100 /var/log/auth.log > {{ evidence_dir.path }}/auth.log
+
+    - name: Verify evidence files
+      stat:
+        path: "{{ evidence_dir.path }}/{{ item }}"
+      loop: [ps.txt, netstat.txt, last.txt, auth.log]
+
+    - name: Show evidence location
+      debug:
+        msg: "Evidence collected in {{ evidence_dir.path }}"
