@@ -114,7 +114,7 @@ cd docker/pc2-cti && docker compose up -d
 
 ##  Reproducible tests
 
-6 scenarios are shipped as JSON payloads in `tests/scenarios/`. Each one can be replayed with a single `curl`:
+6 scenarios are shipped as JSON payloads in `docs/12-tests-validation.md`. Each one can be replayed with a single `curl`:
 
 ```bash
 curl -s -X POST http://100.64.0.11:5678/webhook/<id> \
