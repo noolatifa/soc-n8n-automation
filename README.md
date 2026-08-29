@@ -98,18 +98,18 @@ cd docker/pc2-cti && docker compose up -d
 
 | Doc | Subject |
 |---|---|
-| [01](01-architecture.md) | Global architecture, VM topology, alert lifecycle |
-| [02](02-reseau-tailscale.md) | Tailscale network, addressing plan, flow matrix |
-| [03](03-docker-compose.md) | The two Docker stacks (VM SOC + VM CTI) |
-| [04](04-wazuh.md) | Manager, agents, rules, Wazuh → n8n integration |
-| [05](05-suricata.md) | Suricata NIDS: install, config, custom rules |
-| [06](06-sysmon-windows.md) | Windows agent + Sysmon |
-| [07](07-n8n-workflow.md) | The 42-node workflow, blocks B1–B7 |
-| [08](08-wazuh-n8n-integration.md) | Custom Wazuh → n8n integration script |
-| [09](09-active-response.md) | block/unblock IP+port scripts, rollback |
-| [10](10-ansible-forensics.md) | Playbook, sudoers, SSH nodes |
-| [11](11-postgresql.md) | Schema, constraints, `dashboard_ro` |
-| [12](12-tests-validation.md) | curl scenarios + proofs |
+| [01](/docs/01-architecture.md) | Global architecture, VM topology, alert lifecycle |
+| [02](/docs/02-reseau-tailscale.md) | Tailscale network, addressing plan, flow matrix |
+| [03](/docs/03-docker-compose.md) | The two Docker stacks (VM SOC + VM CTI) |
+| [04](/docs/04-wazuh.md) | Manager, agents, rules, Wazuh → n8n integration |
+| [05](/docs/05-suricata.md) | Suricata NIDS: install, config, custom rules |
+| [06](/docs/06-sysmon-windows.md) | Windows agent + Sysmon |
+| [07](/docs/07-n8n-workflow.md) | The 42-node workflow, blocks B1–B7 |
+| [08](/docs/08-wazuh-n8n-integration.md) | Custom Wazuh → n8n integration script |
+| [09](/docs/09-active-response.md) | block/unblock IP+port scripts, rollback |
+| [10](/docs/10-ansible-forensics.md) | Playbook, sudoers, SSH nodes |
+| [11](/docs/11-postgresql.md) | Schema, constraints, `dashboard_ro` |
+| [12](/docs/12-tests-validation.md) | curl scenarios + proofs |
 ---
 
 ##  Reproducible tests
