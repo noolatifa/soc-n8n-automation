@@ -56,7 +56,7 @@ A single alert can trigger **multiple** simultaneous actions (e.g. `BLOCK_IP` + 
 
 ##  The n8n workflow — 42 nodes, 7 logical blocks
 
-![Workflow n8n - 42 nodes](screenshots/n8n-workflow-full.png)
+Workflow n8n - 42 nodes
 
 | Block | Purpose |
 |---|---|
@@ -122,7 +122,7 @@ curl -s -X POST http://100.64.0.11:5678/webhook/<id> \
   -d @tests/scenarios/scenario1-level15.json
 ```
 
-See [docs/11-tests-validation.md](docs/11-tests-validation.md) for the full matrix and expected proofs.
+See [docs/12-tests-validation.md](docs/12-tests-validation.md) for the full matrix and expected proofs.
 
 ---
 
