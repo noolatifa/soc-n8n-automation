@@ -82,7 +82,8 @@ Full node-by-node description: [07-n8n-workflow.md](07-n8n-workflow.md).
 | [05](05-suricata.md) | Suricata NIDS: install, config, custom rules |
 | [06](06-sysmon-windows.md) | Windows agent + Sysmon |
 | [07](07-n8n-workflow.md) | The 42-node workflow, blocks B1–B7 |
-| [08](08-active-response.md) | block/unblock IP+port scripts, rollback |
-| [09](09-ansible-forensics.md) | Playbook, sudoers, SSH nodes |
-| [10](10-postgresql.md) | Schema, constraints, `dashboard_ro` |
-| [11](11-tests-validation.md) | curl scenarios + proofs |
+| [08](08-wazuh-n8n-integration.md) | Custom Wazuh → n8n integration script |
+| [09](09-active-response.md) | block/unblock IP+port scripts, rollback |
+| [10](10-ansible-forensics.md) | Playbook, sudoers, SSH nodes |
+| [11](11-postgresql.md) | Schema, constraints, `dashboard_ro` |
+| [12](12-tests-validation.md) | curl scenarios + proofs |
