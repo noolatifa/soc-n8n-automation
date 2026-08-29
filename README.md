@@ -1,9 +1,9 @@
-# 🛡️ SOC IA — Automated Detection & Response Pipeline
+# SOC IA — Automated Detection & Response Pipeline
 
 > **Blue Team** layer of an AI-assisted Security Operations Center.
 > Detect → Enrich → Decide → Respond → Rollback → Forensics, all orchestrated automatically.
 
-![Workflow n8n - 42 nodes](screenshots/n8n-workflow-full.png)
+![Workflow n8n - 42 nodes](screenshots/n8n-workflow-main.png)
 
 ---
 
