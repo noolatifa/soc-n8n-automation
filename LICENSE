@@ -1,0 +1,13 @@
+﻿Copyright (c) 2026 Latifa Noomen & Hamza Kalai
+
+The Blue Team layer (detection, orchestration, automated response,
+forensics, data model) was created by Latifa Noomen and Hamza Kalai.
+
+The AI layer used for testing is not part of this repository.
+The personal AI layer is under dev in another branch and will be merged into main after completion.
+
+You are free to use, copy and learn from this work.
+If you use it publicly (project, report, presentation, article, demo),
+you must mention the authors.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
