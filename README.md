@@ -84,4 +84,4 @@ ai/
 
 ### RAG Dataset
 
-See [`data/SCHEMA.md`](data/SCHEMA.md) for the dataset format used by `ingest.py`.
+See [`data/SCHEMA.md`](./ai/data/SCHEMA.md) for the dataset format used by `ingest.py`.
