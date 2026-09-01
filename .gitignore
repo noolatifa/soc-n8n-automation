@@ -3,3 +3,7 @@ __pycache__/
 venv/
 .env
 chroma_data/
+# private dev fixtures
+data/
+scripts/generate_dataset.py
+generate_dataset.py
