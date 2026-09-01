@@ -1,0 +1,186 @@
+[
+  {
+    "wazuh_alert": {
+      "correlation_id": "1787081965919-jzup6nri",
+      "full_raw": {
+        "alert": {
+          "rule": {
+            "id": "5712",
+            "level": 15,
+            "description": "SSH brute force attempt from external IP"
+          },
+          "data": {
+            "srcip": "198.51.100.55",
+            "dstport": 22
+          },
+          "agent": {
+            "id": "005",
+            "name": "vulnerable-machine-linux"
+          },
+          "timestamp": "2026-08-18T19:30:00.000Z"
+        },
+        "correlation_id": "1787081965919-jzup6nri"
+      }
+    },
+    "threat_intelligence": {
+      "misp": {
+        "found": true,
+        "event": {
+          "id": "8288",
+          "orgc_id": "1",
+          "org_id": "1",
+          "date": "2026-08-18",
+          "threat_level_id": "3",
+          "info": "Wazuh Alert [N/A] - Unknown",
+          "published": false,
+          "uuid": "6899948a-80cf-4c7d-b766-da5f9b6144ff",
+          "attribute_count": "1",
+          "analysis": "0",
+          "timestamp": "1787081966",
+          "distribution": "0",
+          "proposal_email_lock": false,
+          "locked": false,
+          "publish_timestamp": "0",
+          "first_publication": "0",
+          "sharing_group_id": "0",
+          "disable_correlation": false,
+          "extends_uuid": "",
+          "protected": null,
+          "event_creator_email": "admin@soc.local",
+          "Org": {
+            "id": "1",
+            "name": "ADMIN",
+            "uuid": "11487595-097f-4d46-954a-006054728ef3",
+            "local": true
+          },
+          "Orgc": {
+            "id": "1",
+            "name": "ADMIN",
+            "uuid": "11487595-097f-4d46-954a-006054728ef3",
+            "local": true
+          },
+          "Attribute": [
+            {
+              "id": "17215261",
+              "type": "text",
+              "category": "External analysis",
+              "to_ids": false,
+              "uuid": "6cd5cc9d-29c8-4560-9f7b-c3641e49d201",
+              "event_id": "8288",
+              "distribution": "5",
+              "timestamp": "1787081967",
+              "comment": "Full Wazuh alert log",
+              "sharing_group_id": "0",
+              "deleted": false,
+              "disable_correlation": false,
+              "object_id": "0",
+              "object_relation": null,
+              "first_seen": null,
+              "last_seen": null,
+              "value": "No full log available",
+              "Galaxy": [],
+              "ShadowAttribute": []
+            }
+          ],
+          "ShadowAttribute": [],
+          "RelatedEvent": [],
+          "Galaxy": [],
+          "Object": [],
+          "EventReport": [],
+          "CryptographicKey": [],
+          "Tag": [
+            {
+              "id": "26988",
+              "name": "wazuh",
+              "colour": "#b337af",
+              "exportable": true,
+              "user_id": "0",
+              "hide_tag": false,
+              "numerical_value": null,
+              "is_galaxy": false,
+              "is_custom_galaxy": false,
+              "local_only": false,
+              "local": false,
+              "relationship_type": null
+            },
+            {
+              "id": "26989",
+              "name": "n8n-auto",
+              "colour": "#899d91",
+              "exportable": true,
+              "user_id": "0",
+              "hide_tag": false,
+              "numerical_value": null,
+              "is_galaxy": false,
+              "is_custom_galaxy": false,
+              "local_only": false,
+              "local": false,
+              "relationship_type": null
+            },
+            {
+              "id": "26990",
+              "name": "soc-pipeline",
+              "colour": "#b22e19",
+              "exportable": true,
+              "user_id": "0",
+              "hide_tag": false,
+              "numerical_value": null,
+              "is_galaxy": false,
+              "is_custom_galaxy": false,
+              "local_only": false,
+              "local": false,
+              "relationship_type": null
+            }
+          ]
+        },
+        "attributes": [
+          {
+            "id": "17215261",
+            "type": "text",
+            "category": "External analysis",
+            "to_ids": false,
+            "uuid": "6cd5cc9d-29c8-4560-9f7b-c3641e49d201",
+            "event_id": "8288",
+            "distribution": "5",
+            "timestamp": "1787081967",
+            "comment": "Full Wazuh alert log",
+            "sharing_group_id": "0",
+            "deleted": false,
+            "disable_correlation": false,
+            "object_id": "0",
+            "object_relation": null,
+            "first_seen": null,
+            "last_seen": null,
+            "value": "No full log available",
+            "Galaxy": [],
+            "ShadowAttribute": []
+          }
+        ]
+      },
+      "opencti": {
+        "found": false,
+        "full_response": {
+          "data": {
+            "stixCyberObservables": {
+              "edges": []
+            }
+          }
+        },
+        "indicators": []
+      }
+    },
+    "correlation_summary": {
+      "total_matches": 1,
+      "preliminary_verdict": "intel_found",
+      "misp_attributes_count": 1,
+      "opencti_indicators_count": 0
+    },
+    "analysis_request": {
+      "task": "Analyze this security alert and determine if it's a TRUE POSITIVE or FALSE POSITIVE",
+      "context": {
+        "source": "Wazuh SIEM alert enriched with MISP and OpenCTI threat intelligence",
+        "goal": "Provide actionable security analysis"
+      }
+    }
+  }
+]
