@@ -15,9 +15,11 @@ class AutomatedAction(BaseModel):
 
 
 class Verdict(BaseModel):
-    classification: str
+    verdict: str                # TRUE_POSITIVE | FALSE_POSITIVE
+    confidence_score: int = 0
     attack_type: str = "unknown"
     mitre_tactic: str = "unknown"
-    confidence_score: int = 0
+    analysis_context: str = ""
     reasoning: str = ""
+    recommendation: str = ""
     automated_action: AutomatedAction = AutomatedAction()
