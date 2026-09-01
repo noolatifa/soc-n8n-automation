@@ -1,8 +1,8 @@
 # RAG Dataset Schema
 
-## Format attendu par `ingest.py`
+## Format expected by `ingest.py`
 
-Le script `ingest.py` lit un fichier JSON avec la structure suivante :
+The `ingest.py` script reads a JSON file with the following structure:
 
 ```json
 {
@@ -39,28 +39,28 @@ Le script `ingest.py` lit un fichier JSON avec la structure suivante :
 }
 ```
 
-## Champs
+## Fields
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |---|---|---|
-| `id` | string | Identifiant unique de l'alerte |
-| `source` | string | Origine de l'alerte (ex. `wazuh`) |
-| `agent` | string | Nom de l'agent source |
-| `rule.id` | string | ID de la règle Wazuh |
-| `rule.level` | int | Niveau de sévérité |
-| `rule.description` | string | Description de la règle |
-| `data.srcip` | string | IP source |
-| `data.dstport` | int | Port de destination |
+| `id` | string | Unique alert identifier |
+| `source` | string | Alert origin (e.g. `wazuh`) |
+| `agent` | string | Source agent name |
+| `rule.id` | string | Wazuh rule ID |
+| `rule.level` | int | Severity level |
+| `rule.description` | string | Rule description |
+| `data.srcip` | string | Source IP |
+| `data.dstport` | int | Destination port |
 | `classification` | string | Verdict (`TRUE_POSITIVE`, `FALSE_POSITIVE`, ...) |
-| `attack_type` | string | Type d'attaque identifié |
-| `mitre_tactic` | string | Tactique MITRE ATT&CK associée |
-| `confidence_score` | int | Score de confiance (0–100) |
-| `reasoning` | string | Justification du verdict |
-| `automated_action` | object | Action(s) automatisée(s) déclenchée(s) |
+| `attack_type` | string | Identified attack type |
+| `mitre_tactic` | string | Associated MITRE ATT&CK tactic |
+| `confidence_score` | int | Confidence score (0–100) |
+| `reasoning` | string | Justification for the verdict |
+| `automated_action` | object | Automated action(s) triggered |
 
-## Mode production
+## Production mode
 
-En production, `ingest.py` ne lit pas un fichier JSON statique : il récupère les verdicts validés directement depuis PostgreSQL.
+In production, `ingest.py` doesn't read a static JSON file: it fetches validated verdicts directly from PostgreSQL.
 
 ```sql
 SELECT
@@ -82,4 +82,4 @@ FROM alerts
 WHERE ai_classification IS NOT NULL
 ```
 
-Cette requête ne remonte que les alertes déjà classifiées par le service IA (`ai_classification IS NOT NULL`), garantissant que seuls des verdicts validés alimentent le dataset RAG.
+This query only pulls alerts that have already been classified by the AI service (`ai_classification IS NOT NULL`), ensuring only validated verdicts feed the RAG dataset.
