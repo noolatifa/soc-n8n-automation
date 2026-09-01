@@ -36,7 +36,8 @@ Test with a sample payload:
 
 ```powershell
 $body = Get-Content tests\n8n_payload_example.json -Raw
-Invoke-RestMethod -Uri http://127.0.0.1:8000/qualifier-alerte -Method Post -Body $body -ContentType "application/json"
+$result = Invoke-RestMethod -Uri http://127.0.0.1:8000/qualifier-alerte -Method Post -Body $body -ContentType "application/json"
+$result | ConvertTo-Json -Depth 10
 ```
 
 Expected output:
