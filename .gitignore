@@ -4,6 +4,6 @@ venv/
 .env
 chroma_data/
 # private dev fixtures
-data/
-scripts/generate_dataset.py
+ai/data/*
+!ai/data/*.md
 generate_dataset.py
