@@ -14,7 +14,7 @@ A full **SOAR** (Security Orchestration, Automation & Response) pipeline that:
 1. **Detects** threats via Suricata (network) and Sysmon (Windows endpoint)
 2. **Centralizes** alerts in Wazuh SIEM
 3. **Enriches** with Threat Intelligence from MISP + OpenCTI
-4. **Decides** via AI analysis (LLaMA 3 through Ollama)
+4. **Decides** via AI analysis ( Qwen2.5:7b through Ollama)
 5. **Responds** automatically with iptables blocking (IP + port)
 6. **Rolls back** if the AI verdict is "false positive" (with 4-level proof)
 7. **Collects forensics** via Ansible for post-incident analysis
